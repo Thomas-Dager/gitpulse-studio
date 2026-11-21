@@ -1,0 +1,38 @@
+{
+  "name": "gitpulse-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automated GitHub Publisher & Sync Engine (Dashboard + CLI + Antigravity Skill)",
+  "scripts": {
+    "dev": "next dev -p 3050",
+    "build": "next build",
+    "start": "next start -p 3050",
+    "lint": "next lint",
+    "cli": "tsx cli/index.ts",
+    "doctor": "tsx cli/index.ts doctor",
+    "install:skill": "tsx cli/index.ts install-skill"
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "@octokit/rest": "^21.0.0",
+    "clsx": "^2.1.1",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.7",
+    "lucide-react": "^0.468.0",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "simple-git": "^3.27.0",
+    "tailwind-merge": "^2.5.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^4.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
