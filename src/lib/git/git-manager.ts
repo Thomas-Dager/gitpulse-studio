@@ -13,6 +13,7 @@ import { detectProjectStack, ensureSmartGitignore } from "@/lib/git/stack-detect
 import {
   ensurePublicRepository,
   remoteUrlToHtmlUrl,
+  resolveGitHubToken,
   sanitizeRepoName,
 } from "@/lib/github/github-client";
 import type {
@@ -319,6 +320,21 @@ export async function inspectWorkspaceProjects(
   });
 }
 
+function buildGitAuthConfigArgs(): string[] {
+  const { token } = resolveGitHubToken();
+  if (!token) return [];
+  const basicAuth = Buffer.from(`x-access-token:${token}`, "utf8").toString("base64");
+  return [
+    "-c",
+    `http.https://github.com/.extraheader=AUTHORIZATION: basic ${basicAuth}`,
+  ];
+}
+
+function sanitizeGitError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  return raw.replace(/AUTHORIZATION:\s*basic\s+[A-Za-z0-9+/=]+/gi, "AUTHORIZATION: basic ***");
+}
+
 async function ensureRepoGitIdentity(git: SimpleGit): Promise<void> {
   const globalInfo = getGitGlobalInfo();
   if (!globalInfo.userName) {
@@ -577,29 +593,38 @@ export async function syncProjectToGitHub(
     };
   }
 
+  const authArgs = buildGitAuthConfigArgs();
+
   try {
     try {
-      await git.push(["-u", "origin", activeBranch]);
+      await git.raw([...authArgs, "push", "-u", "origin", activeBranch]);
     } catch (pushErr) {
-      const pushErrMsg = pushErr instanceof Error ? pushErr.message : String(pushErr);
+      const pushErrMsg = sanitizeGitError(pushErr);
       if (
         pushErrMsg.includes("fetch first") ||
         pushErrMsg.includes("non-fast-forward") ||
         pushErrMsg.includes("rejected")
       ) {
         warnings.push("El repositorio remoto tenía commits previos; integrando historiales automáticamente...");
-        await git.pull("origin", activeBranch, ["--allow-unrelated-histories", "--no-edit"]);
-        await git.push(["-u", "origin", activeBranch]);
+        await git.raw([
+          ...authArgs,
+          "pull",
+          "origin",
+          activeBranch,
+          "--allow-unrelated-histories",
+          "--no-edit",
+        ]);
+        await git.raw([...authArgs, "push", "-u", "origin", activeBranch]);
       } else {
-        throw pushErr;
+        throw new Error(pushErrMsg);
       }
     }
 
     if (tagName) {
-      await git.pushTags("origin");
+      await git.raw([...authArgs, "push", "origin", "--tags"]);
     }
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
+    const errorMsg = sanitizeGitError(err);
     insertSyncLog({
       projectId,
       projectName,
@@ -699,6 +724,7 @@ export async function createBranchOrTag(params: {
   }
 
   const git = createGitInstance(projectPath);
+  const authArgs = buildGitAuthConfigArgs();
   const actions: string[] = [];
 
   if (params.branch?.trim()) {
@@ -714,7 +740,7 @@ export async function createBranchOrTag(params: {
     if (params.push) {
       const remotes = await git.getRemotes();
       if (remotes.some((r) => r.name === "origin")) {
-        await git.push(["-u", "origin", b]);
+        await git.raw([...authArgs, "push", "-u", "origin", b]);
         actions.push("y subida a GitHub");
       }
     }
@@ -727,7 +753,7 @@ export async function createBranchOrTag(params: {
     if (params.push) {
       const remotes = await git.getRemotes();
       if (remotes.some((r) => r.name === "origin")) {
-        await git.pushTags("origin");
+        await git.raw([...authArgs, "push", "origin", "--tags"]);
         actions.push("y publicado en GitHub");
       }
     }

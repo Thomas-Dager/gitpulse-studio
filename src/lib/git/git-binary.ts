@@ -105,6 +105,39 @@ export function tryResolveGitBinary(): string | null {
   }
 }
 
+const BLOCKED_SIMPLE_GIT_ENV_KEYS = new Set([
+  "editor",
+  "git_askpass",
+  "git_config_global",
+  "git_config_system",
+  "git_config_count",
+  "git_config",
+  "git_editor",
+  "git_exec_path",
+  "git_external_diff",
+  "git_pager",
+  "git_proxy_command",
+  "git_template_dir",
+  "git_sequence_editor",
+  "git_ssh",
+  "git_ssh_command",
+  "pager",
+  "prefix",
+  "ssh_askpass",
+]);
+
+function buildSafeGitEnv(): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, val] of Object.entries(process.env)) {
+    if (val === undefined) continue;
+    if (BLOCKED_SIMPLE_GIT_ENV_KEYS.has(key.toLowerCase())) continue;
+    env[key] = val;
+  }
+  env.GIT_TERMINAL_PROMPT = "0";
+  env.GCM_INTERACTIVE = "never";
+  return env;
+}
+
 export function createGitInstance(baseDir: string): SimpleGit {
   const binary = resolveGitBinary();
   return simpleGit({
@@ -112,7 +145,7 @@ export function createGitInstance(baseDir: string): SimpleGit {
     binary,
     trimmed: true,
     maxConcurrentProcesses: 4,
-  });
+  }).env(buildSafeGitEnv());
 }
 
 export interface GitGlobalInfo {
