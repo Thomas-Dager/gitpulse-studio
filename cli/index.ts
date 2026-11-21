@@ -3,7 +3,7 @@ import path from "node:path";
 import { Command } from "commander";
 import dotenv from "dotenv";
 import { getAppConfig, updateAppConfig } from "@/lib/db";
-import { getInstalledSkillPath, runDoctor } from "@/lib/doctor";
+import { getAntigravityInstallTargets, runDoctor } from "@/lib/doctor";
 import {
   inspectProjectGitStatus,
   inspectWorkspaceProjects,
@@ -217,20 +217,47 @@ program
 
 program
   .command("install-skill")
-  .description("Instala el Skill nativo github-autosync en ~/.gemini/antigravity/skills/")
+  .description("Instala el Skill, Plugin Global y Regla Always-On de GitPulse en Antigravity (~/.gemini/config/)")
   .action(() => {
-    const source = path.join(projectRoot, "antigravity-skill", "SKILL.md");
-    const dest = getInstalledSkillPath();
+    const skillSource = path.join(projectRoot, "antigravity-skill", "SKILL.md");
+    const rulesSource = path.join(projectRoot, "antigravity-skill", "AGENTS.md");
 
-    if (!fs.existsSync(source)) {
-      console.error(`No se encontró la plantilla del Skill en ${source}`);
+    if (!fs.existsSync(skillSource) || !fs.existsSync(rulesSource)) {
+      console.error(`No se encontraron las plantillas del Skill/Reglas en ${path.join(projectRoot, "antigravity-skill")}`);
       process.exitCode = 1;
       return;
     }
 
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.copyFileSync(source, dest);
-    console.log(`[OK] Skill 'github-autosync' instalado correctamente en:\n     ${dest}`);
+    const targets = getAntigravityInstallTargets();
+    const copyTo = (src: string, dest: string) => {
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.copyFileSync(src, dest);
+    };
+
+    // 1. Skill global (~/.gemini/config/skills/github-autosync/SKILL.md)
+    copyTo(skillSource, targets.globalSkill);
+
+    // 2. Plugin global con regla always-on (~/.gemini/config/plugins/gitpulse-studio/)
+    fs.mkdirSync(path.dirname(targets.globalPluginManifest), { recursive: true });
+    fs.writeFileSync(
+      targets.globalPluginManifest,
+      JSON.stringify({ name: "gitpulse-studio" }, null, 2) + "\n",
+      "utf8"
+    );
+    copyTo(rulesSource, targets.globalPluginRules);
+    copyTo(skillSource, targets.globalPluginSkill);
+
+    // 3. Regla jerárquica en la carpeta raíz del workspace (ej. D:\Antigravity\AGENTS.md)
+    copyTo(rulesSource, targets.workspaceRootRules);
+
+    // 4. Copia de compatibilidad en ~/.gemini/antigravity/skills/
+    copyTo(skillSource, targets.legacySkill);
+
+    console.log("[OK] Integración completa con Antigravity instalada:");
+    console.log(`     - Skill Global  : ${targets.globalSkill}`);
+    console.log(`     - Plugin Global : ${targets.globalPluginDir}`);
+    console.log(`     - Regla Raíz    : ${targets.workspaceRootRules}`);
+    console.log(`     - Compatibilidad: ${targets.legacySkill}`);
   });
 
 program.parseAsync(process.argv).catch((err) => {

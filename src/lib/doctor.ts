@@ -6,8 +6,33 @@ import { getGitGlobalInfo } from "@/lib/git/git-binary";
 import { getGitHubAuthStatus, TOKEN_CREATION_URL } from "@/lib/github/github-client";
 import type { DoctorCheck, DoctorReport } from "@/types";
 
+export interface AntigravityInstallTargets {
+  globalSkill: string;
+  globalPluginDir: string;
+  globalPluginManifest: string;
+  globalPluginRules: string;
+  globalPluginSkill: string;
+  workspaceRootRules: string;
+  legacySkill: string;
+}
+
 export function getInstalledSkillPath(): string {
-  return path.join(os.homedir(), ".gemini", "antigravity", "skills", "github-autosync", "SKILL.md");
+  return path.join(os.homedir(), ".gemini", "config", "skills", "github-autosync", "SKILL.md");
+}
+
+export function getAntigravityInstallTargets(): AntigravityInstallTargets {
+  const home = os.homedir();
+  const cfg = getAppConfig();
+  const globalPluginDir = path.join(home, ".gemini", "config", "plugins", "gitpulse-studio");
+  return {
+    globalSkill: path.join(home, ".gemini", "config", "skills", "github-autosync", "SKILL.md"),
+    globalPluginDir,
+    globalPluginManifest: path.join(globalPluginDir, "plugin.json"),
+    globalPluginRules: path.join(globalPluginDir, "rules", "AGENTS.md"),
+    globalPluginSkill: path.join(globalPluginDir, "skills", "github-autosync", "SKILL.md"),
+    workspaceRootRules: path.join(cfg.rootWorkspacePath, "AGENTS.md"),
+    legacySkill: path.join(home, ".gemini", "antigravity", "skills", "github-autosync", "SKILL.md"),
+  };
 }
 
 export async function runDoctor(): Promise<DoctorReport> {
@@ -76,16 +101,40 @@ export async function runDoctor(): Promise<DoctorReport> {
     });
   }
 
-  // 4. Antigravity Skill
-  const skillPath = getInstalledSkillPath();
-  const skillInstalled = fs.existsSync(skillPath);
+  // 4. Antigravity Skill, Plugin Global y Regla Raíz
+  const targets = getAntigravityInstallTargets();
+  const skillInstalled = fs.existsSync(targets.globalSkill);
+  const pluginInstalled =
+    fs.existsSync(targets.globalPluginManifest) &&
+    fs.existsSync(targets.globalPluginRules) &&
+    fs.existsSync(targets.globalPluginSkill);
+  const workspaceRulesInstalled = fs.existsSync(targets.workspaceRootRules);
+
   checks.push({
-    name: "Skill Nativo Antigravity (github-autosync)",
+    name: "Skill Global Antigravity (~/.gemini/config/skills)",
     ok: skillInstalled,
     detail: skillInstalled
-      ? `Instalado en ${skillPath}`
-      : `No encontrado en ${skillPath}`,
+      ? `Instalado en ${targets.globalSkill}`
+      : `No encontrado en ${targets.globalSkill}`,
     fixHint: skillInstalled ? undefined : "Ejecuta: npm.cmd run install:skill",
+  });
+
+  checks.push({
+    name: "Plugin Global + Regla Always-On (gitpulse-studio)",
+    ok: pluginInstalled,
+    detail: pluginInstalled
+      ? `Activo en ${targets.globalPluginDir}`
+      : `Faltan archivos del plugin en ${targets.globalPluginDir}`,
+    fixHint: pluginInstalled ? undefined : "Ejecuta: npm.cmd run install:skill",
+  });
+
+  checks.push({
+    name: "Regla Jerárquica Workspace (AGENTS.md)",
+    ok: workspaceRulesInstalled,
+    detail: workspaceRulesInstalled
+      ? `Instalada en ${targets.workspaceRootRules}`
+      : `No encontrada en ${targets.workspaceRootRules}`,
+    fixHint: workspaceRulesInstalled ? undefined : "Ejecuta: npm.cmd run install:skill",
   });
 
   return {
